@@ -1,53 +1,47 @@
-### auth.py — Firebase Email/Password Admin Auth (admin login only)
-
 import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, auth
-import json
+import pyrebase
 
-# ✅ Initialize Firebase Admin SDK once using Streamlit secrets
-def init_firebase():
-    if "firebase_app" not in st.session_state:
-        # Load credentials from Streamlit secrets
-        cred_info = st.secrets["firebase_service_account"]
-        cred = credentials.Certificate(json.loads(cred_info.to_json()))
-        firebase_admin.initialize_app(cred)
-        st.session_state["firebase_app"] = True
-
-# ✅ Create a new user (admin sign-up only)
-def sign_up_user(email, password):
-    try:
-        user = auth.create_user(email=email, password=password)
-        return f"✅ User created: {user.uid}"
-    except Exception as e:
-        return f"❌ {e}"
-
-# ✅ TEMPORARY Admin Login System
-admin_users = {
-    "admin@example.com": "adminpass"  # Replace or load from a file later
+firebase_config = {
+    "apiKey": st.secrets["firebase_api_key"],
+    "authDomain": st.secrets["firebase_auth_domain"],
+    "projectId": st.secrets["firebase_project_id"],
+    "storageBucket": st.secrets["firebase_storage_bucket"],
+    "messagingSenderId": st.secrets["firebase_messaging_sender_id"],
+    "appId": st.secrets["firebase_app_id"],
+    "measurementId": st.secrets["firebase_measurement_id"],
+    "databaseURL": ""
 }
 
-def login_admin(email, password):
-    if email in admin_users and password == admin_users[email]:
-        st.session_state["user"] = email
-        return True
-    return False
+firebase = pyrebase.initialize_app(firebase_config)
+auth = firebase.auth()
 
-# ✅ Streamlit Login UI (called from main.py)
-def render_login_ui():
-    st.sidebar.header("🔐 Login")
-    email = st.sidebar.text_input("Email")
-    password = st.sidebar.text_input("Password", type="password")
-    if st.sidebar.button("Login"):
-        if login_admin(email, password):
-            st.sidebar.success(f"✅ Logged in as {email}")
-        else:
-            st.sidebar.error("❌ Invalid credentials")
+def login_ui():
+    st.title("🔐 Login to Jetset Trading Pro+")
+    choice = st.selectbox("Login or Sign Up", ["Login", "Sign Up"])
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🆕 Sign Up")
-    new_email = st.sidebar.text_input("New Email", key="new_email")
-    new_pw = st.sidebar.text_input("New Password", type="password", key="new_pw")
-    if st.sidebar.button("Create Account"):
-        msg = sign_up_user(new_email, new_pw)
-        st.sidebar.info(msg)
+    if choice == "Login":
+        if st.button("Login"):
+            try:
+                user = auth.sign_in_with_email_and_password(email, password)
+                st.session_state["user"] = user
+                st.success("Logged in successfully!")
+                st.experimental_rerun()
+            except:
+                st.error("Login failed. Please check your credentials.")
+    else:
+        if st.button("Create Account"):
+            try:
+                auth.create_user_with_email_and_password(email, password)
+                st.success("Account created successfully. You can now log in.")
+            except:
+                st.error("Account creation failed. Try a different email.")
+
+def is_logged_in():
+    return "user" in st.session_state
+
+def logout_button():
+    if st.button("Logout"):
+        st.session_state.pop("user", None)
+        st.experimental_rerun()
